@@ -71,7 +71,6 @@ Change the lines:
    #if LIBAVCODEC_VERSION_MAJOR < 61
    #error "Error: libavcodec API version is too old for the libav encoder!"
    #endif
-   }
    ```
 
  ...to reduce the `LIBAVCODEC_VERSION_MAJOR` dependecy, e.g.,: 
@@ -80,7 +79,6 @@ Change the lines:
    #if LIBAVCODEC_VERSION_MAJOR < 60
    #error "Error: libavcodec API version is too old for the libav encoder!"
    #endif
-   }
    ```
 
 ## Nodes
