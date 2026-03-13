@@ -17,11 +17,9 @@ class ArduCamService(Node):
 
         # Get ROS param
         self.declare_parameter('mode', 'depth')  # Can be "raw" or "depth"
-        self.declare_parameter('framerate', 15)
         mode = self.get_parameter('mode').get_parameter_value().string_value.lower()
         self.frame_type = ac.FrameType.RAW if mode == 'raw' else ac.FrameType.DEPTH
         self.get_logger().info(f"Selected ArduCam ToF camera measure: {mode.upper()}")
-        self.framerate = self.get_parameter('framerate').get_parameter_value().integer_value
         
         # Inatailze the ArduCam camera
         self.cam = ac.ArducamCamera()
@@ -50,7 +48,7 @@ class ArduCamService(Node):
                     self.range = self.cam.getControl(ac.Control.RANGE)
                 self.get_logger().info("ArduCam initialized successfully.")
                 info = self.cam.getCameraInfo()
-                self.get_logger().info(f"Camera resolution: {info.width}x{info.height} @ {self.framerate} frames / second")
+                self.get_logger().info(f"Camera resolution: {info.width}x{info.height}")
                 self.get_logger().info(f"Camera type: {info.device_type}")
                 if self.frame_type == ac.FrameType.DEPTH:
                     self.get_logger().info(f"Camera depth range: {self.range / 1000.0} m")
@@ -81,7 +79,8 @@ class ArduCamService(Node):
                     self.get_logger().error(f'Camera capture error: {e}')
                 finally:
                     self.cam.releaseFrame(frame)
-                    
+        return response
+    
     # Clean up
     def destroy_node(self) -> None:
         if hasattr(self, 'cam'):
