@@ -1,35 +1,56 @@
 #!/usr/bin/env python3
 import os
+import cv2
+import numpy as np
+
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-import numpy as np
-import cv2
+
+from cam_interfaces.srv import Image
+
 
 class AsciiImageViewer(Node):
     def __init__(self):
         super().__init__('ascii_image_viewer')
 
         # Declare and get parameters
-        self.declare_parameter('width', 80)
-        self.width = self.get_parameter('width').get_parameter_value().integer_value
-
+        self.declare_parameter('screen_width', 80)
+        self.declare_parameter('service_name', 'camera/capture_image')
+        self.width = self.get_parameter('screen_width').get_parameter_value().integer_value
+        self.service_name = self.get_parameter('service_name').get_parameter_value().string_value
+        
         # Detect truecolor support
         colorterm = os.environ.get("COLORTERM", "")
         self.truecolor = colorterm in ["truecolor", "24bit"]
         self.get_logger().info(f"Terminal truecolor support: {self.truecolor}")
         
-        # Set up ROS subscriber
+        # Set up ROS service client
         self.bridge = CvBridge()
-        self.subscriber = self.create_subscription(
-            Image,
-            'camera/image',
-            self.image_callback,
-            qos_profile_sensor_data
-        )
+        self.client = self.create_client(Image, self.service_name)
 
+        # Wait until the camera service exists before starting
+        self.get_logger().info(f"Waiting for service '{self.service_name}' ...")
+        while rclpy.ok() and not self.client.wait_for_service(timeout_sec = 1.0):
+            self.get_logger().info(f"Service '{self.service_name}' not available yet...")
+        self.get_logger().info(f"Connected to service: '{self.service_name}'")
+        self.pending_future = None
+        self.stopped = False
+        self.request_image()  # ...send request for first image
+
+    # Send request for image asynchronously
+    def request_image(self):
+        if self.stopped or not rclpy.ok():
+            return
+
+        if self.pending_future is not None and not self.pending_future.done():
+            return
+
+        req = Image.Request()
+        self.pending_future = self.client.call_async(req)
+        self.pending_future.add_done_callback(self.handle_response)
+        
+    '''
     # Callback for receiving and displaying images
     def image_callback(self, msg):
         try:
@@ -41,7 +62,30 @@ class AsciiImageViewer(Node):
                 print(self.image_to_grayscale_ascii(img, width = self.width))
         except Exception as e:
             self.get_logger().error(f"Error: {e}")
+    '''
+    
+    # Async handling of service response 
+    def handle_response(self, future):
+        try:
+            response = future.result()
+            if response is None:
+                self.get_logger().error("Service returned no response.")
+            else:
+                msg = response.image
+                img = self.bridge.imgmsg_to_cv2(msg, desired_encoding = 'bgr8')
+                print("\x1b[2J\x1b[H", end='') # ...clear screen
+                if self.truecolor:
+                    print(self.image_to_color_ascii(img, width = self.width), flush = True)
+                else:
+                    print(self.image_to_grayscale_ascii(img, width = self.width), flush = True)
 
+        except Exception as e:
+            self.get_logger().error(f"Service call failed: {e}")
+
+        # Immediately requesting the next frame
+        if rclpy.ok() and not self.stopped:
+            self.request_image()
+            
     # Convert image to color ASCII 
     def image_to_color_ascii(self, img, width):
         block = '▀' # Unicode upper-half block
@@ -85,6 +129,12 @@ class AsciiImageViewer(Node):
         ascii_img = np.take(ascii_chars, indices)
 
         return "\n".join("".join(row) for row in ascii_img)
+
+    # Clean up
+    def destroy_node(self):
+        self.stopped = True
+        super().destroy_node()
+    
     
 # Main function
 def main(args = None):

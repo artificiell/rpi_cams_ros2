@@ -1,6 +1,6 @@
-# rpi_cam_ros2
+# rpi_cams_ros2
 
-ROS 2 package for capturing and processing video streams from the Raspberry Pi Camera Module (v2). This package includes:
+ROS 2 package for capturing and processing video streams from the Raspberry Pi Camera Module (v2) and ArduCam Time-of-Flight camera. This package includes:
 
 * A camera driver node using `rpicam-vid` to capture and publish image and camera info messages.
 * An ASCII image viewer node for terminal-based video debugging.

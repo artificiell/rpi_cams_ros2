@@ -1,15 +1,19 @@
+#!/usr/bin/env python3
+import cv2
+import numpy as np
+
 import rclpy
 from rclpy.node import Node
 from cam_interfaces.srv import Image
 from cv_bridge import CvBridge
-import numpy as np
+
 import ArducamDepthCamera as ac
-import cv2
+
 
 # Class for handle ArduCam Time-of-Flight (ToF) Camera
-class ArducamNode(Node):
+class ArduCamService(Node):
     def __init__(self):
-        super().__init__('arducam_tof_camera_node')
+        super().__init__('arducam_tof_camera_service')
 
         # Get ROS param
         self.declare_parameter('mode', 'depth')  # Can be "raw" or "depth"
@@ -25,8 +29,8 @@ class ArducamNode(Node):
 
         # Setup ROS publisher or service
         self.bridge = CvBridge()
-        self.service = self.create_service(Image, 'arducam/image', self.capture)
-
+        self.service = self.create_service(Image, 'arducam/image', self.capture_callback)
+        
     # Open and initialize the ArduCam camera
     def init(self) -> bool:
         self.get_logger().info(f"ArduCam SDK version: {ac.__version__}")
@@ -53,7 +57,7 @@ class ArducamNode(Node):
                 return True
 
     # Cature frame from the ArduCam camera
-    def capture(self, request: Image.Request, response: Image.Response):
+    def capture_callback(self, request: Image.Request, response: Image.Response) -> None:
         response.success = False
         if self.initialized:
             frame = self.cam.requestFrame(200)
@@ -62,36 +66,34 @@ class ArducamNode(Node):
                     if self.frame_type == ac.FrameType.RAW and isinstance(frame, ac.RawData):
                         buf = frame.raw_data
                         buf = (buf / (1 << 4)).astype(np.uint8)
-                        response.image = self.bridge.cv2_to_imgmsg(buf, encoding='mono8')
-
+                        response.image = self.bridge.cv2_to_imgmsg(buf, encoding = 'mono8')    
                     elif self.frame_type == ac.FrameType.DEPTH and isinstance(frame, ac.DepthData):
                         depth_buf = frame.depth_data
                         confidence_buf = frame.confidence_data
-            
+                        
                         # Scale and colorize
                         scaled = (depth_buf * (255.0 / self.range)).astype(np.uint8)
                         colored = cv2.applyColorMap(scaled, cv2.COLORMAP_RAINBOW)
                         colored[confidence_buf < 30] = (0, 0, 0)  # Confidence filter
                         response.image = self.bridge.cv2_to_imgmsg(colored, encoding='bgr8')
-
-                    response.sucess = True
-	        except Exception as e:
+                    response.success = True
+                except Exception as e:
                     self.get_logger().error(f'Camera capture error: {e}')
                 finally:
                     self.cam.releaseFrame(frame)
                     
     # Clean up
-    def destroy_node(self):
+    def destroy_node(self) -> None:
         if hasattr(self, 'cam'):
             self.cam.stop()
             self.cam.close()
         super().destroy_node()
-
+        
 
 # Main fn
 def main(args=None):
     rclpy.init(args=args)
-    node = ArducamNode()
+    node = ArduCamService()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -99,7 +101,7 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
-
+        
 if __name__ == '__main__':
     main()
 
