@@ -12,7 +12,7 @@ class StreamImageViewer(Node):
         super().__init__('opencv_image_viewer')
 
         # Parameters
-        self.declare_parameter('service_name', 'camera/capture_image')
+        self.declare_parameter('service_name', 'camera/image')
         self.declare_parameter('window_name', 'Camera Frame')
 
         self.service_name = self.get_parameter('service_name').get_parameter_value().string_value
