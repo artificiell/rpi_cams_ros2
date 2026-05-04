@@ -31,6 +31,7 @@ class RPiCameraService(Node):
         self.declare_parameter('denoise', 'auto')   # auto, cdn_off, cdn_fast, cdn_hq
         self.declare_parameter('frame_id', 'camera_frame')
         self.declare_parameter('camera_name', 'rpi_camera')
+        self.declare_parameter('service_name', 'camera/image')
         self.frame_width = self.get_parameter('width').get_parameter_value().integer_value
         self.frame_height = self.get_parameter('height').get_parameter_value().integer_value
         self.flip = self.get_parameter('flip').get_parameter_value().bool_value
@@ -38,7 +39,8 @@ class RPiCameraService(Node):
         self.timeout = self.get_parameter('timeout').get_parameter_value().integer_value
         self.sharpness = self.get_parameter('sharpness').get_parameter_value().double_value
         self.denoise = self.get_parameter('denoise').get_parameter_value().string_value
-        self.frame_id = self.get_parameter('frame_id').get_parameter_value().string_value 
+        self.frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
+        self.service_name = self.get_parameter('service_name').get_parameter_value().string_value
         self.get_logger().warn(f"Initalizing camera with resolution: {self.frame_width} x {self.frame_height}")
         self.get_logger().warn(f"Denoise: {self.denoise}")
         
@@ -63,8 +65,8 @@ class RPiCameraService(Node):
 
         # Set up ROS service
         self.bridge = CvBridge()
-        self.service = self.create_service(Image, 'camera/image', self.capture_callback)
-        self.get_logger().info('Camera image capture service ready: /camera/image')
+        self.service = self.create_service(Image, self.service_name, self.capture_callback)
+        self.get_logger().info(f'Camera image capture service ready: {self.service_name}')
 
     # Map exact image resolution to calibration filenames
     def get_calibration_filename(self, width: int, height: int):

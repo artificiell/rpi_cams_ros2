@@ -17,17 +17,19 @@ class ArduCamService(Node):
 
         # Get ROS param
         self.declare_parameter('mode', 'depth')  # Can be "raw" or "depth"
+        self.declare_parameter('service_name', 'camera/depth')
         mode = self.get_parameter('mode').get_parameter_value().string_value.lower()
         self.frame_type = ac.FrameType.RAW if mode == 'raw' else ac.FrameType.DEPTH
         self.get_logger().info(f"Selected ArduCam ToF camera measure: {mode.upper()}")
-        
+        self.service_name = self.get_parameter('service_name').get_parameter_value().string_value
+ 
         # Inatailze the ArduCam camera
         self.cam = ac.ArducamCamera()
         self.initialized = self.init()
 
         # Setup ROS publisher or service
         self.bridge = CvBridge()
-        self.service = self.create_service(Image, 'arducam/image', self.capture_callback)
+        self.service = self.create_service(Image, self.service_name, self.capture_callback)
         
     # Open and initialize the ArduCam camera
     def init(self) -> bool:
