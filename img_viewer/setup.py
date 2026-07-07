@@ -26,7 +26,8 @@ setup(
         'console_scripts': [
             'ascii_viewer = img_viewer.ascii_viewer:main',
             'img_grabber = img_viewer.img_grabber:main',
-            'stream_viewer = img_viewer.stream_viewer:main'
+            'stream_viewer = img_viewer.stream_viewer:main',
+            'web_video_server = img_viewer.web_video_server:main'
         ],
     },
 )
