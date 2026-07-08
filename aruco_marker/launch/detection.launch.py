@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -8,7 +9,6 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-
     # Launch configuration
     robot_ns = LaunchConfiguration('robot_ns')
     width = LaunchConfiguration('width')
@@ -17,8 +17,9 @@ def generate_launch_description():
     flip_image = LaunchConfiguration('flip_image')
     display = LaunchConfiguration('display')
     server_port = LaunchConfiguration('server_port')
-    camera_height = LaunchConfiguration('camera_height')
-    camera_offset = LaunchConfiguration('camera_offset')
+    launch_camera = LaunchConfiguration('launch_camera')
+    marker_size = LaunchConfiguration('marker_size')
+    aruco_dictionary_id = LaunchConfiguration('aruco_dictionary_id')
 
     # Launch arguments
     robot_ns_launch_arg = DeclareLaunchArgument(
@@ -39,30 +40,29 @@ def generate_launch_description():
     )
     flip_image_arg = DeclareLaunchArgument(
         'flip_image',
-        default_value = 'True'
+        default_value = 'true'
     )
     display_arg = DeclareLaunchArgument(
         'display',
-        default_value = 'True',
-        description = 'Whether to also launch web_video_server for browser viewing.'
+        default_value = 'true',
+        description = 'Whether web_video_server should also be launched (and annotated ArUco amerkers being displayed).'
     )
     server_port_arg = DeclareLaunchArgument(
         'server_port',
         default_value = '9090'
     )
-    camera_height_arg = DeclareLaunchArgument(
-        'camera_height',
+    marker_size_arg = DeclareLaunchArgument(
+        'marker_size',
         default_value = '0.1',
-        description = 'Camera height above the floor, in meters.'
+        description = 'Size of the ArUco markers in meters.'
     )
-    camera_offset_arg = DeclareLaunchArgument(
-        'camera_offset',
-        default_value = '0.04',
-        description = "How far forward of the robot's reference frame "
-                      "(base_link) the camera is mounted, in meters."
+    aruco_dictionary_id_arg = DeclareLaunchArgument(
+        'aruco_dictionary_id',
+        default_value = 'DICT_ARUCO_ORIGINAL',
+        description = 'OpenCV ArUco dictionary used to generate the markers.'
     )
 
-    # Include camera lanch
+    # Include camera launch
     camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -79,18 +79,19 @@ def generate_launch_description():
             'flip_image': flip_image,
             'display': display,
             'server_port': server_port,
-        }.items()
+        }.items(),
     )
 
-    # Image to laser scan node
-    image2scan_node = Node(
-        package = 'rpi_cam',
-        namespace = robot_ns,
-        executable = 'image2scan',
-        name = 'rpi_image_to_laserscan_node',
-        parameters = [{
-            'height': camera_height,
-            'camera_offset': camera_offset,
+    # ArUco detection node
+    detection_node = Node(
+        package='aruco_marker',
+        namespace=robot_ns,
+        executable='detect',
+        name='aruco_detection_node',
+        parameters=[{
+            'marker_size': marker_size,
+            'aruco_dictionary_id': aruco_dictionary_id,
+            'display': display,
         }]
     )
 
@@ -102,8 +103,8 @@ def generate_launch_description():
         flip_image_arg,
         display_arg,
         server_port_arg,
-        camera_height_arg,
-        camera_offset_arg,
+        marker_size_arg,
+        aruco_dictionary_id_arg,
         camera_launch,
-        image2scan_node
+        detection_node
     ])
