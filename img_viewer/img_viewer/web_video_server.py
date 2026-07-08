@@ -20,6 +20,14 @@ The ArUco stream's availability is polled periodically via the ROS graph
 panels (raw + ArUco) depending on whether that service currently exists, and
 auto-refreshes so this updates without restarting anything.
 
+Guard rails:
+  - Each stream connection's socket has a read/write timeout, so a client
+    that goes away without closing cleanly (sleep, dropped WiFi, backgrounded
+    tab) can't leave its handler thread blocked forever.
+  - Each stream (raw / aruco) caps the number of simultaneous viewers; beyond
+    that, new connections get a 503 rather than silently degrading everyone's
+    frame rate and bandwidth.
+
 Parameters:
     camera_service_name  - default "camera/image"
     aruco_service_name   - default "aruco/image"
@@ -37,6 +45,17 @@ from rclpy.node import Node
 from cv_bridge import CvBridge
 
 from cam_interfaces.srv import Image as ImageSrv
+
+# Max simultaneous viewers allowed per stream (raw / aruco each counted
+# separately). Beyond this, new connections get a 503 rather than silently
+# degrading everyone's frame rate / bandwidth. Tune to classroom WiFi.
+MAX_VIEWERS_PER_STREAM = 4
+
+# How long (seconds) a stream connection may go without successfully writing
+# a chunk before we give up on it. Guards against a client that went away
+# without closing cleanly (sleep, dropped WiFi, backgrounded tab) leaving its
+# handler thread blocked on a dead socket forever.
+STREAM_SOCKET_TIMEOUT = 10
 
 
 class CameraStreamNode(Node):
@@ -59,6 +78,11 @@ class CameraStreamNode(Node):
         self.latest_raw_jpeg = None
         self.latest_aruco_jpeg = None
         self.aruco_available = False
+
+        # Tracks how many browser connections are currently reading each
+        # stream, so we can cap it (see MAX_VIEWERS_PER_STREAM above).
+        self.viewer_counts = {'raw': 0, 'aruco': 0}
+        self.viewer_lock = threading.Lock()
 
         # Client for the always-on raw camera service
         self.camera_client = self.create_client(ImageSrv, camera_service_name)
@@ -148,13 +172,19 @@ class CameraStreamNode(Node):
 class MjpegHandler(BaseHTTPRequestHandler):
     node: CameraStreamNode = None  # injected before server starts
 
+    def setup(self):
+        super().setup()
+        # Guard rail: don't let a dead/sleeping client hang this thread's
+        # socket operations (e.g. wfile.write) forever.
+        self.connection.settimeout(STREAM_SOCKET_TIMEOUT)
+
     def do_GET(self):
         if self.path == '/':
             self.serve_index()
         elif self.path == '/stream':
             self.serve_stream(kind='raw')
-        elif self.path == '/aruco':
-            self.serve_stream(kind='marker')
+        elif self.path == '/stream_aruco':
+            self.serve_stream(kind='aruco')
         else:
             self.send_response(404)
             self.end_headers()
@@ -165,12 +195,12 @@ class MjpegHandler(BaseHTTPRequestHandler):
 
         panels = (
             '<div><h3 style="color:white;text-align:center;">Camera</h3>'
-            '<img src="/stream" style="width:640px;"></div>'
+            '<img src="/stream" style="width:480px;"></div>'
         )
         if aruco_on:
             panels += (
                 '<div><h3 style="color:white;text-align:center;">ArUco</h3>'
-                '<img src="/aruco" style="width:640px;"></div>'
+                '<img src="/stream_aruco" style="width:480px;"></div>'
             )
 
         html = f"""
@@ -192,7 +222,7 @@ class MjpegHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def serve_stream(self, kind):
-        if kind == 'marker':
+        if kind == 'aruco':
             with self.node.lock:
                 if not self.node.aruco_available:
                     self.send_response(503)
@@ -200,17 +230,29 @@ class MjpegHandler(BaseHTTPRequestHandler):
                     self.wfile.write(b'ArUco display service not available')
                     return
 
-        self.send_response(200)
-        self.send_header('Age', '0')
-        self.send_header('Cache-Control', 'no-cache, private')
-        self.send_header('Pragma', 'no-cache')
-        self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
-        self.end_headers()
+        # Guard rail: cap simultaneous viewers per stream so bandwidth/thread
+        # count stays bounded rather than degrading everyone at once.
+        with self.node.viewer_lock:
+            if self.node.viewer_counts[kind] >= MAX_VIEWERS_PER_STREAM:
+                self.send_response(503)
+                self.end_headers()
+                self.wfile.write(
+                    b'Too many viewers on this stream right now, please try again shortly.'
+                )
+                return
+            self.node.viewer_counts[kind] += 1
 
         try:
+            self.send_response(200)
+            self.send_header('Age', '0')
+            self.send_header('Cache-Control', 'no-cache, private')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
+            self.end_headers()
+
             while True:
                 with self.node.lock:
-                    frame = self.node.latest_aruco_jpeg if kind == 'marker' else self.node.latest_raw_jpeg
+                    frame = self.node.latest_aruco_jpeg if kind == 'aruco' else self.node.latest_raw_jpeg
                 if frame is not None:
                     self.wfile.write(b'--FRAME\r\n')
                     self.send_header('Content-Type', 'image/jpeg')
@@ -219,8 +261,13 @@ class MjpegHandler(BaseHTTPRequestHandler):
                     self.wfile.write(frame)
                     self.wfile.write(b'\r\n')
                 time.sleep(1 / 15)  # cap the pace at which we re-check/send frames
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
+            # Client disconnected uncleanly or its socket timed out — just
+            # stop serving this connection, don't let it hang the thread.
             pass
+        finally:
+            with self.node.viewer_lock:
+                self.node.viewer_counts[kind] -= 1
 
     def log_message(self, format, *args):
         return  # silence default per-request console logging
@@ -235,6 +282,7 @@ def main(args=None):
 
     MjpegHandler.node = node
     server = ThreadingHTTPServer(('0.0.0.0', node.http_port), MjpegHandler)
+    server.daemon_threads = True  # don't let a stuck handler thread block clean shutdown
     node.get_logger().info(f'Serving on http://0.0.0.0:{node.http_port}/')
     try:
         server.serve_forever()
