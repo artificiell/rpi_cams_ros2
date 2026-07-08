@@ -18,7 +18,6 @@ def generate_launch_description():
     flip_image = LaunchConfiguration('flip_image')
     marker_size = LaunchConfiguration('marker_size')
     aruco_dictionary_id = LaunchConfiguration('aruco_dictionary_id')
-    service_name = LaunchConfiguration('service_name')
     camera_frame = LaunchConfiguration('camera_frame')
 
     # Launch arguments
@@ -45,10 +44,6 @@ def generate_launch_description():
     aruco_dictionary_id_arg = DeclareLaunchArgument(
         'aruco_dictionary_id',
         default_value='DICT_ARUCO_ORIGINAL'
-    )
-    service_name_arg = DeclareLaunchArgument(
-        'service_name',
-        default_value='camera/image'
     )
     camera_frame_arg = DeclareLaunchArgument(
         'camera_frame',
@@ -79,8 +74,8 @@ def generate_launch_description():
         parameters=[{
             'marker_size': ParameterValue(marker_size, value_type=float),
             'aruco_dictionary_id': aruco_dictionary_id,
-            'service_name': service_name,
             'camera_frame': camera_frame,
+            'display': False
         }]
     )
 
@@ -91,7 +86,6 @@ def generate_launch_description():
         flip_image_arg,
         marker_size_arg,
         aruco_dictionary_id_arg,
-        service_name_arg,
         camera_frame_arg,
         camera_launch,
         aruco_node,

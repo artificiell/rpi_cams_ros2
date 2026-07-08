@@ -11,7 +11,7 @@ def generate_launch_description():
     resolution = LaunchConfiguration('resolution')
     frame_rate = LaunchConfiguration('frame_rate')
     flip_image = LaunchConfiguration('flip_image')
-    camera_height = LaunchConfiguration('camera_height')
+    server_port = LaunchConfiguration('server_port')
 
     # Launch arguments
     robot_ns_launch_arg = DeclareLaunchArgument(
@@ -30,9 +30,9 @@ def generate_launch_description():
         'flip_image',
         default_value = 'True'
     )
-    camera_height_arg = DeclareLaunchArgument(
-        'camera_height',
-        default_value = '0.1'
+    server_port_arg = DeclareLaunchArgument(
+        'server_port',
+        default_value = '9090'
     )
 
     # Camera node
@@ -49,23 +49,23 @@ def generate_launch_description():
         }]
     )
 
-    # Image to laser scan node
-    image2scan_node = Node(
-        package = 'rpi_cam',
+    # Web server node
+    web_sever_node = Node(
+        package = 'img_viewer',
         namespace = robot_ns,
-        executable = 'image2scan',
-        name = 'rpi_image_to_laserscan_node',
+        executable = 'web_video_server',
+        name = 'camera_web_stream_bridge',
         parameters=[{
-            'height': camera_height,
+            'http_port': LaunchConfiguration('server_port'),
         }]
     )
-    
+
     return LaunchDescription([
         robot_ns_launch_arg,
         resolution_arg,
         frame_rate_arg,
         flip_image_arg,
-        camera_height_arg,
+        server_port_arg,
         camera_node,
-        image2scan_node
+        web_sever_node
     ])
