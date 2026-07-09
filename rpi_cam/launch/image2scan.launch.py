@@ -5,6 +5,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from launch.conditions import IfCondition
 
 
 def generate_launch_description():
@@ -17,9 +18,10 @@ def generate_launch_description():
     flip_image = LaunchConfiguration('flip_image')
     display = LaunchConfiguration('display')
     server_port = LaunchConfiguration('server_port')
+    launch_camera = LaunchConfiguration('launch_camera')
     camera_height = LaunchConfiguration('camera_height')
     camera_offset = LaunchConfiguration('camera_offset')
-
+    
     # Launch arguments
     robot_ns_launch_arg = DeclareLaunchArgument(
         'robot_ns',
@@ -39,16 +41,21 @@ def generate_launch_description():
     )
     flip_image_arg = DeclareLaunchArgument(
         'flip_image',
-        default_value = 'True'
+        default_value = 'true'
     )
     display_arg = DeclareLaunchArgument(
         'display',
-        default_value = 'True',
+        default_value = 'false',
         description = 'Whether to also launch web_video_server for browser viewing.'
     )
     server_port_arg = DeclareLaunchArgument(
         'server_port',
         default_value = '9090'
+    )
+    launch_camera_arg = DeclareLaunchArgument(
+        'launch_camera',
+        default_value = 'true',
+        description = 'Whether this file should also launch up the camera.'
     )
     camera_height_arg = DeclareLaunchArgument(
         'camera_height',
@@ -71,7 +78,7 @@ def generate_launch_description():
                 'camera.launch.py'
             ])
         ),
-        launch_arguments={
+        launch_arguments = {
             'robot_ns': robot_ns,
             'width': width,
             'height': height,
@@ -79,7 +86,8 @@ def generate_launch_description():
             'flip_image': flip_image,
             'display': display,
             'server_port': server_port,
-        }.items()
+        }.items(),
+        condition = IfCondition(launch_camera)
     )
 
     # Image to laser scan node
@@ -89,7 +97,7 @@ def generate_launch_description():
         executable = 'image2scan',
         name = 'rpi_image_to_laserscan_node',
         parameters = [{
-            'height': camera_height,
+            'camera_height': camera_height,
             'camera_offset': camera_offset,
         }]
     )
@@ -102,6 +110,7 @@ def generate_launch_description():
         flip_image_arg,
         display_arg,
         server_port_arg,
+        launch_camera_arg,
         camera_height_arg,
         camera_offset_arg,
         camera_launch,

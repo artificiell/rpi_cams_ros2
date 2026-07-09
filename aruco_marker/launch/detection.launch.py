@@ -51,6 +51,11 @@ def generate_launch_description():
         'server_port',
         default_value = '9090'
     )
+    launch_camera_arg = DeclareLaunchArgument(
+        'launch_camera',
+        default_value = 'true',
+        description = 'Whether this file should also launch up the camera.'
+    )
     marker_size_arg = DeclareLaunchArgument(
         'marker_size',
         default_value = '0.1',
@@ -71,7 +76,7 @@ def generate_launch_description():
                 'camera.launch.py'
             ])
         ),
-        launch_arguments={
+        launch_arguments = {
             'robot_ns': robot_ns,
             'width': width,
             'height': height,
@@ -80,6 +85,7 @@ def generate_launch_description():
             'display': display,
             'server_port': server_port,
         }.items(),
+        condition = IfCondition(launch_camera)
     )
 
     # ArUco detection node
@@ -88,7 +94,7 @@ def generate_launch_description():
         namespace=robot_ns,
         executable='detect',
         name='aruco_detection_node',
-        parameters=[{
+        parameters = [{
             'marker_size': marker_size,
             'aruco_dictionary_id': aruco_dictionary_id,
             'display': display,
@@ -103,6 +109,7 @@ def generate_launch_description():
         flip_image_arg,
         display_arg,
         server_port_arg,
+        launch_camera_arg,
         marker_size_arg,
         aruco_dictionary_id_arg,
         camera_launch,

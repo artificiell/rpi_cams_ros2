@@ -36,11 +36,11 @@ def generate_launch_description():
     )
     flip_image_arg = DeclareLaunchArgument(
         'flip_image',
-        default_value = 'True'
+        default_value = 'true'
     )
     display_arg = DeclareLaunchArgument(
         'display',
-        default_value = 'True',
+        default_value = 'true',
         description = 'Whether to also launch web_video_server for browser viewing.'
     )
     server_port_arg = DeclareLaunchArgument(
