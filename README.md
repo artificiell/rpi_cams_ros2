@@ -27,22 +27,22 @@ ROS 2 package for capturing and processing video streams from the Raspberry Pi C
    cd ~/ros2_ws/src/
    git clone https://github.com/artificiell/rpi_cam_ros2.git
    ```
-   
+<!--    
 2. Install ststem dependencies (_note, this will take some time!_):
 
    ```bash
    cd ~/ros2_ws/src/rpi_cam_ros2/scripts/
    ./install_camera_dependencies.sh
-   ```
+   ``` -->
 
-3. Build the workspace:
+2. Build the workspace:
 
    ```bash
    cd ~/ros2_ws/
    colcon build
    ```
 
-4. Source the workspace:
+3. Source the workspace:
 
    ```bash
    source install/setup.bash
