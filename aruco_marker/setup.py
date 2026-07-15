@@ -2,7 +2,7 @@ import os
 from glob import glob
 from setuptools import find_packages, setup
 
-package_name = 'rpi_cam'
+package_name = 'aruco_marker'
 
 setup(
     name=package_name,
@@ -19,13 +19,17 @@ setup(
     zip_safe=True,
     maintainer='Andreas Persson',
     maintainer_email='andreas.persson@oru.se',
-    description='Raspberry Pi Camera - ROS 2 wrapper<',
+    description='ArUco Marker - ROS 2 wrapper',
     license='MIT',
-    tests_require=['pytest'],
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
     entry_points={
         'console_scripts': [
-            'camera = rpi_cam.camera:main',
-            'image2scan = rpi_cam.image2scan:main'
+            'detect = aruco_marker.detect:main',
+            'generate = aruco_marker.generate:main'
         ],
     },
 )

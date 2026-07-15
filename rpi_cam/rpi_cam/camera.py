@@ -167,7 +167,7 @@ class RPiCameraService(Node):
         return msg
     
 
- # Main function       
+# Main function       
 def main(args = None):
     rclpy.init(args = args)
     node = RPiCameraService()
