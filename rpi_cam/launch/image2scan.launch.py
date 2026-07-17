@@ -20,7 +20,7 @@ def generate_launch_description():
     )
     resolution_arg = DeclareLaunchArgument(
         'resolution',
-        default_value = '180p'
+        default_value = 'VGA'
     )
     frame_rate_arg = DeclareLaunchArgument(
         'frame_rate',
@@ -34,7 +34,7 @@ def generate_launch_description():
         'camera_height',
         default_value = '0.08'
     )
-    
+
     # Camera node
     camera_node = Node(
         package = 'rpi_cam',
@@ -56,7 +56,7 @@ def generate_launch_description():
         executable = 'image2scan',
         name = 'rpi_image_to_laserscan_node',
         parameters=[{
-            'height': LaunchConfiguration('camera_height'),
+            'height': camera_height,
         }]
     )
     
