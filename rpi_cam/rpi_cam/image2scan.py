@@ -145,7 +145,7 @@ class RPiImageToLaserScan(Node):
         scan.angle_increment = angle_increment
         scan.range_min = self.range_min
         scan.range_max = self.range_max
-        scan.ranges = ranges
+        scan.ranges = reversed(ranges)
 
         self.scan_pub.publish(scan)
 
