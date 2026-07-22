@@ -105,35 +105,58 @@ class RPiImageToLaserScan(Node):
         )
 
         # Find pixel coordinates
-        pixels = np.column_stack(np.where(mask > 0))
+        v_coords, u_coords = np.where(mask > 0)
+
+        if len(v_coords) == 0:
+            self.publish_empty_scan(stamp)
+            return
+
+        cx, cy = self.camera_model.cx(), self.camera_model.cy()
+        fx, fy = self.camera_model.fx(), self.camera_model.fy()
+
+        x_opt = (u_coords - cx) / fx
+        y_opt = -(v_coords - cy) / fy
+        z_opt = np.ones_like(x_opt)
+
+        rays_opt = np.column_stack((x_opt, y_opt, z_opt))  # Shape: (N, 3)
 
         # Initialize scan ranges
         ranges = [float('inf')] * self.num_ranges
         angle_increment = (self.angle_max - self.angle_min) / self.num_ranges
 
-        # Project pixels to rays
-        for v, u in pixels:
-            # Back-project to ray
-            x = (u - self.camera_model.cx()) / self.camera_model.fx()
-            y = -(v - self.camera_model.cy()) / self.camera_model.fy()
-            z = 1.0
-            ray = np.array([x, y, z])
-            ray = ray / np.linalg.norm(ray)
+        valid_downward = rays_opt[:, 1] < -1e-5
+        if not np.any(valid_downward):
+            self.publish_empty_scan(stamp)
+            return
 
-            if ray[1] >= 0:
-                continue  # ray going up
+        rays_opt = rays_opt[valid_downward]
 
-            t = -self.camera_height / ray[1]
-            point = t * ray
-            distance = np.linalg.norm(point)
+        t = -self.camera_height / rays_opt[:, 1]
+        pts_opt = rays_opt * t[:, np.newaxis]
 
-            # Angle in image plane (X-Z)
-            angle = math.atan2(point[0], point[2])
-            if self.angle_min <= angle <= self.angle_max and self.range_min <= distance <= self.range_max:
-                index = int((angle - self.angle_min) / angle_increment)
-                if 0 <= index < self.num_ranges:
-                    if distance < ranges[index]:
-                        ranges[index] = distance
+        distances = np.linalg.norm(pts_opt, axis=1)
+        angles = np.arctan2(pts_opt[:, 0], pts_opt[:, 2])
+
+        valid_mask = (
+            (angles >= self.angle_min) &
+            (angles <= self.angle_max) &
+            (distances <= self.range_max) &
+            (distances >= self.range_min)
+        )
+
+        if not np.any(valid_mask):
+            self.publish_empty_scan(stamp)
+            return
+
+        valid_angles = angles[valid_mask]
+        valid_distances = distances[valid_mask]
+
+        indices = ((valid_angles - self.angle_min) / angle_increment).astype(np.int32)
+        indices = np.clip(indices, 0, self.num_ranges - 1)
+
+        ranges = np.full(self.num_ranges, np.inf, dtype=np.float32)
+        np.minimum.at(ranges, indices, valid_distances)
+        ranges = np.flip(ranges, axis=0)
 
         # Publish laser scan
         scan = LaserScan()
@@ -145,8 +168,21 @@ class RPiImageToLaserScan(Node):
         scan.angle_increment = angle_increment
         scan.range_min = self.range_min
         scan.range_max = self.range_max
-        scan.ranges = reversed(ranges)
+        scan.ranges = ranges.tolist()
 
+        self.scan_pub.publish(scan)
+
+    def publish_empty_scan(self, stamp):
+        scan = LaserScan()
+        scan.header = Header()
+        scan.header.stamp = stamp
+        scan.header.frame_id = self.scan_frame
+        scan.angle_min = self.angle_min
+        scan.angle_max = self.angle_max
+        scan.angle_increment = self.angle_increment
+        scan.range_min = self.range_min
+        scan.range_max = self.range_max
+        scan.ranges = [float('inf')] * self.num_ranges
         self.scan_pub.publish(scan)
 
 # Main function
